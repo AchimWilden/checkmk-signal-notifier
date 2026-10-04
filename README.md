@@ -11,7 +11,7 @@ The project has two parts:
 Checkmk notification script --Bearer token--> Signal relay --Docker network--> signal-api --Signal--> recipient(s)
 ```
 
-The relay does not run or register Signal itself. It reuses the existing Signal API container and its persistent account data.
+The relay does not run or register Signal itself. It reuses the existing Signal API container and its persistent account data. It can run as a small standalone Compose project or as another service in the existing SignalClient Compose project.
 
 ## Requirements
 
@@ -40,6 +40,10 @@ docker compose ps
 ```
 
 The relay's `/healthz` endpoint checks that the Signal API configuration endpoint responds. It does not send a message.
+
+## Use an existing SignalClient Compose project
+
+If SignalClient already has a Compose project, the relay can be added as another service there instead of running the repository's Compose project separately. Use the existing network that contains `signal-api` (for example, `notification-nw`) and point `build` and `env_file` at this checkout. In this mode, remove the standalone Compose project's external-network declaration; the existing Compose project already owns the network. Do not run both modes at once because both publish the same relay port.
 
 ## Install the Checkmk notification script
 
