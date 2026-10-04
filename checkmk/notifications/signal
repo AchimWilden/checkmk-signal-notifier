@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+CONFIG_PATH = Path(os.environ.get("OMD_ROOT", str(Path.home()))) / "etc/check_mk/signal-notify.json"
+
+
+def fail(message, exit_code):
+    print(f"Signal notification: {message}")
+    sys.exit(exit_code)
+
+
+def notification_message():
+    event_type = os.getenv("NOTIFY_NOTIFICATIONTYPE", "EVENT")
+    if os.getenv("NOTIFY_WHAT", "SERVICE").upper() == "HOST":
+        name = f"Host {os.getenv('NOTIFY_HOSTNAME', '?')}"
+        state = os.getenv("NOTIFY_HOSTSTATE", "UNKNOWN")
+        output = os.getenv("NOTIFY_HOSTOUTPUT", "")
+    else:
+        hostname = os.getenv("NOTIFY_HOSTNAME", "?")
+        service = os.getenv("NOTIFY_SERVICEDESC", "?")
+        name = f"{hostname} / {service}"
+        state = os.getenv("NOTIFY_SERVICESTATE", "UNKNOWN")
+        output = os.getenv("NOTIFY_SERVICEOUTPUT", "")
+
+    return f"Checkmk {event_type}\n{name}: {state}\n{output}".strip()[:4000]
+
+
+def main():
+    try:
+        config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        relay_url = config["relay_url"].rstrip("/")
+        token = config["token"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+        fail(f"Konfiguration unlesbar ({error.__class__.__name__})", 2)
+
+    if not relay_url.startswith(("http://", "https://")) or not token:
+        fail("relay_url oder token fehlt", 2)
+
+    payload = json.dumps({"message": notification_message()}).encode("utf-8")
+    request = Request(
+        f"{relay_url}/notify",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=25) as response:
+            if 200 <= response.status < 300:
+                print("Signal API hat die Benachrichtigung angenommen")
+                return
+            fail(f"Relay antwortete mit HTTP {response.status}", 1)
+    except HTTPError as error:
+        exit_code = 1 if error.code >= 500 else 2
+        fail(f"Relay antwortete mit HTTP {error.code}", exit_code)
+    except (URLError, TimeoutError, OSError):
+        fail("Relay nicht erreichbar", 1)
+
+
+if __name__ == "__main__":
+    main()

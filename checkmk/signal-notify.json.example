@@ -1,0 +1,4 @@
+{
+  "relay_url": "http://signal-host.example.invalid:8788",
+  "token": "replace-with-the-same-long-random-token-as-NOTIFY_TOKEN"
+}

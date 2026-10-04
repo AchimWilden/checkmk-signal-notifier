@@ -1,0 +1,33 @@
+services:
+  signal-notify-relay:
+    build: ./relay
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      SIGNAL_API_URL: ${SIGNAL_API_URL:-http://signal-api:8080}
+      SIGNAL_NUMBER: ${SIGNAL_NUMBER:?Set SIGNAL_NUMBER in .env}
+      SIGNAL_RECIPIENTS: ${SIGNAL_RECIPIENTS:?Set SIGNAL_RECIPIENTS in .env}
+      NOTIFY_TOKEN: ${NOTIFY_TOKEN:?Set NOTIFY_TOKEN in .env}
+    ports:
+      - "${NOTIFY_BIND_IP:-127.0.0.1}:${NOTIFY_PORT:-8788}:8080"
+    networks:
+      - signal-api
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  signal-api:
+    external: true
+    name: ${SIGNAL_DOCKER_NETWORK:-signalclient_notification-nw}
